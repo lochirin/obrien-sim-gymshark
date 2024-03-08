@@ -1,6 +1,6 @@
 package models
 
-type Sizes struct {
+type OrderSpecification struct {
 	Sizes    []int `json:"sizes"`
 	Capacity int   `json:"capacity"`
 }

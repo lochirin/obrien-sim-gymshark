@@ -11,106 +11,107 @@ import (
 )
 
 func ComputePackages(w http.ResponseWriter, r *http.Request) {
-	var sizes models.Sizes
+
+	var orderSpecification models.OrderSpecification
 
 	// Decodes request body
 	decoder := json.NewDecoder(r.Body)
-	// Tries to parse the request body into a Sizes object
-	err := decoder.Decode(&sizes)
-
+	// Attempt to parse the request body into a Sizes object
+	err := decoder.Decode(&orderSpecification)
 	// If there is an error, log it out
 	if err != nil {
 		log.Println(err.Error())
 	}
 
-	fmt.Println("JSON Sizes are: ", sizes.Sizes)
-	fmt.Println("JSON Capacity is:", sizes.Capacity)
+	fmt.Println("Order specification package sizes:", orderSpecification.Sizes)
+	fmt.Println("Order specification desired capacity:", orderSpecification.Capacity)
 
-	// Prepare the ascending and descending slices for package sizes
-	var ascendingSizes []int = sizes.Sizes[:]
-	sort.Ints(ascendingSizes)
+	// Prepares the sorted slice for package sizes
+	var sortedSizes []int = orderSpecification.Sizes[:]
+	sort.Ints(sortedSizes)
 
-	fmt.Println("Ascending sizes are", ascendingSizes)
+	fmt.Println("Sorted package sizes:", sortedSizes)
 
-	// Prepare answer map. Initialise all to 0
+	// Prepares the answer map with the package size as keys. Initialise values to 0
 	answer := make(map[int]int)
-	for i := 0; i < len(ascendingSizes); i++ {
-		answer[ascendingSizes[i]] = 0
+	for i := 0; i < len(sortedSizes); i++ {
+		answer[sortedSizes[i]] = 0
 	}
 
-	// Computes packages
+	// Computes number of packages for each package size
 
-	var capacityCounter int = sizes.Capacity
-	var numPackages int
-	var finalIndex int = len(ascendingSizes) - 1
+	var capacityCounter int = orderSpecification.Capacity
+	var finalIndex int = len(sortedSizes) - 1
 
-	// Capacity < Smallest Package Size Scenario
-	if capacityCounter < ascendingSizes[0] {
-		answer[ascendingSizes[0]] = 1
+	// Base case where the desired capacity is smaller than the smallest package size
+	if capacityCounter < sortedSizes[0] {
+		answer[sortedSizes[0]] = 1
 	} else {
 
-		// No Remainder Scenario (e.g. perfect distribution)
+		// No remainder scenario (e.g. perfect distribution)
+		// Allocates from the biggest package size to the smallest
 		for i := 0; i <= finalIndex; i++ {
-			numPackages = capacityCounter / ascendingSizes[finalIndex-i]
+			numPackages := capacityCounter / sortedSizes[finalIndex-i]
 			if numPackages > 0 {
-				capacityCounter = capacityCounter - ascendingSizes[finalIndex-i]*numPackages
-				answer[ascendingSizes[finalIndex-i]] = numPackages
+				capacityCounter = capacityCounter - sortedSizes[finalIndex-i]*numPackages
+				answer[sortedSizes[finalIndex-i]] = numPackages
 			}
 		}
 
-		fmt.Println("Pre-Remainder Package Sizes", answer)
-		fmt.Println("Remaining Capacity:", capacityCounter)
+		fmt.Println("Interim answer before dealing with the remaining capacity:", answer)
+		fmt.Println("Remaining capacity:", capacityCounter)
 
-		// Deal with remainder
+		// Deal with the remaining capacity
 		if capacityCounter > 0 {
 
 			// Calculate waste from sending an extra smallest package
 			// The extra will never be more than the size of the smallest package
-			var excessCapacity int = ascendingSizes[0] - capacityCounter
-			fmt.Println("Wastage from adding an additional smallest size package", excessCapacity)
+			excessCapacityFromAddingAPackage := sortedSizes[0] - capacityCounter
+			fmt.Println("Excess items from adding an additional smallest size package:", excessCapacityFromAddingAPackage)
 
-			// Calculate waste from making an existing package bigger
+			// Calculate waste from making an existing package larger
 			var computedPackageSizes []int
+			// Identifies package sizes in interim solution
 			for key, value := range answer {
 				if value > 0 {
 					computedPackageSizes = append(computedPackageSizes, key)
 				}
 			}
-			var wastageFromEnlargement []int
-			sort.Ints(computedPackageSizes)
-			fmt.Println("Computed package sizes detected", computedPackageSizes)
 
+			fmt.Println("Interim solution package sizes:", computedPackageSizes)
+
+			// Prepares map to identify which package size to make bigger later on
 			wasteValueToPackSizeIndex := make(map[int]int)
+			var wastageFromEnlargement []int
 
 			for _, packSize := range computedPackageSizes {
-				if packSize != ascendingSizes[finalIndex] {
-					var packSizeIndex int = sort.SearchInts(ascendingSizes, packSize)
-					fmt.Println("index ", packSizeIndex)
-					var waste int = ascendingSizes[packSizeIndex+1] - ascendingSizes[packSizeIndex] - capacityCounter
-					fmt.Println("Respective waste", waste)
+				// Can't make the largest package size any bigger
+				if packSize != sortedSizes[finalIndex] {
+					var packSizeIndex int = sort.SearchInts(sortedSizes, packSize)
+					var waste int = sortedSizes[packSizeIndex+1] - sortedSizes[packSizeIndex] - capacityCounter
+					fmt.Println("Excess items from making the", sortedSizes[packSizeIndex], "item package size bigger:", waste)
 					wastageFromEnlargement = append(wastageFromEnlargement, waste)
 					wasteValueToPackSizeIndex[waste] = packSizeIndex
 				}
 			}
 
-			fmt.Println("Waste Map Waste: ", wasteValueToPackSizeIndex)
+			excessCapacityFromBiggerPackage := slices.Min(wastageFromEnlargement)
+			fmt.Println("Least amount of waste from making a package size bigger: ", excessCapacityFromBiggerPackage)
 
-			var excessCapacityTwo int = slices.Min(wastageFromEnlargement)
-
-			fmt.Println("Least Waste: ", excessCapacityTwo)
-
-			if excessCapacityTwo > excessCapacity {
-				answer[ascendingSizes[0]] = answer[ascendingSizes[0]] + 1
+			if excessCapacityFromBiggerPackage > excessCapacityFromAddingAPackage {
+				fmt.Println("More efficient to add an extra package of the smallest size")
+				answer[sortedSizes[0]] = answer[sortedSizes[0]] + 1
 			} else {
-				answer[ascendingSizes[wasteValueToPackSizeIndex[excessCapacityTwo]]] = answer[ascendingSizes[wasteValueToPackSizeIndex[excessCapacityTwo]]] - 1
-				answer[ascendingSizes[wasteValueToPackSizeIndex[excessCapacityTwo]+1]] = answer[ascendingSizes[wasteValueToPackSizeIndex[excessCapacityTwo]+1]] + 1
+				fmt.Println("More efficient to make an existing package bigger")
+				answer[sortedSizes[wasteValueToPackSizeIndex[excessCapacityFromBiggerPackage]]] = answer[sortedSizes[wasteValueToPackSizeIndex[excessCapacityFromBiggerPackage]]] - 1
+				answer[sortedSizes[wasteValueToPackSizeIndex[excessCapacityFromBiggerPackage]+1]] = answer[sortedSizes[wasteValueToPackSizeIndex[excessCapacityFromBiggerPackage]+1]] + 1
 			}
 		}
 	}
 
 	fmt.Println("Final Answer:", answer)
 
-	// HTTP stuff
+	// Sends HTTP response back
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	w.WriteHeader(http.StatusOK)
 	jsonString, _ := json.Marshal(answer)
