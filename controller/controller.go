@@ -85,27 +85,35 @@ func ComputePackages(w http.ResponseWriter, r *http.Request) {
 			var wastageFromEnlargement []int
 
 			for _, packSize := range computedPackageSizes {
-				// Can't make the largest package size any bigger
+				var packSizeIndex int = sort.SearchInts(sortedSizes, packSize)
+				// Check if the pack size is the largest pack size
 				if packSize != sortedSizes[finalIndex] {
-					var packSizeIndex int = sort.SearchInts(sortedSizes, packSize)
 					var waste int = sortedSizes[packSizeIndex+1] - sortedSizes[packSizeIndex] - capacityCounter
 					fmt.Println("Excess items from making the", sortedSizes[packSizeIndex], "item package size bigger:", waste)
 					wastageFromEnlargement = append(wastageFromEnlargement, waste)
 					wasteValueToPackSizeIndex[waste] = packSizeIndex
+				} else {
+					fmt.Println("Cannot make the", sortedSizes[packSizeIndex], "item package size any bigger")
 				}
 			}
 
-			excessCapacityFromBiggerPackage := slices.Min(wastageFromEnlargement)
-			fmt.Println("Least amount of waste from making a package size bigger: ", excessCapacityFromBiggerPackage)
+			if len(wastageFromEnlargement) > 0 {
+				excessCapacityFromBiggerPackage := slices.Min(wastageFromEnlargement)
+				fmt.Println("Least amount of waste from making a package size bigger: ", excessCapacityFromBiggerPackage)
 
-			if excessCapacityFromBiggerPackage > excessCapacityFromAddingAPackage {
-				fmt.Println("More efficient to add an extra package of the smallest size")
-				answer[sortedSizes[0]] = answer[sortedSizes[0]] + 1
+				if excessCapacityFromBiggerPackage > excessCapacityFromAddingAPackage {
+					fmt.Println("More efficient to add an extra package of the smallest size")
+					answer[sortedSizes[0]] = answer[sortedSizes[0]] + 1
+				} else {
+					fmt.Println("More efficient to make an existing package bigger")
+					answer[sortedSizes[wasteValueToPackSizeIndex[excessCapacityFromBiggerPackage]]] = answer[sortedSizes[wasteValueToPackSizeIndex[excessCapacityFromBiggerPackage]]] - 1
+					answer[sortedSizes[wasteValueToPackSizeIndex[excessCapacityFromBiggerPackage]+1]] = answer[sortedSizes[wasteValueToPackSizeIndex[excessCapacityFromBiggerPackage]+1]] + 1
+				}
 			} else {
-				fmt.Println("More efficient to make an existing package bigger")
-				answer[sortedSizes[wasteValueToPackSizeIndex[excessCapacityFromBiggerPackage]]] = answer[sortedSizes[wasteValueToPackSizeIndex[excessCapacityFromBiggerPackage]]] - 1
-				answer[sortedSizes[wasteValueToPackSizeIndex[excessCapacityFromBiggerPackage]+1]] = answer[sortedSizes[wasteValueToPackSizeIndex[excessCapacityFromBiggerPackage]+1]] + 1
+				fmt.Println("Only choice is to add an extra package of the smallest size")
+				answer[sortedSizes[0]] = answer[sortedSizes[0]] + 1
 			}
+
 		}
 	}
 
